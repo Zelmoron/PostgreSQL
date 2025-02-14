@@ -1,122 +1,203 @@
-CREATE SCHEMA "igor";
+do $$
+begin
 
 
 
+/*
+ 1. Удаляем старые элементы
+ ======================================
+ */
 
-CREATE TABLE  IF NOT EXISTS igor.measurment_params (
-    id integer NOT NULL,,
-    measurment_type_id integer NOT NULL,
-    measurment_batch_id integer NOT NULL,
-    height numeric(8,2),
-    temperature numeric(8,2),
-    pressure numeric(8,2),
-    wind_speed numeric(8,2),
-    wind_direction numeric(8,2),
-    bullet_speed numeric(8,2)
-);
-CREATE TABLE IF NOT EXISTS igor.measurment_batch (
-    id integer NOT NULL,,
-    start_period timestamp without time zone DEFAULT now(),
-    position_x numeric(3,2),
-    position_y numeric(3,2),
-    users_id integer NOT NULL
-);
+raise notice 'Запускаем создание новой структуры базы данных meteo'; 
+begin
 
-CREATE TABLE IF NOT EXISTS igor.measurment_type (
-    id integer NOT NULL,
-    equip_type character varying(100)
-);
+	-- Связи
+	alter table if exists public.measurment_input_params
+	drop constraint if exists measurment_type_id_fk;
 
-CREATE TABLE IF NOT EXISTS igor.users (
-    id integer NOT NULL,,
-    username character varying(50),
-	military_position character varying(50)
-);
+	alter table if exists public.employees
+	drop constraint if exists military_rank_id_fk;
 
-CREATE SEQUENCE igor.params_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-ALTER SEQUENCE igor.params_seq OWNED BY igor.measurment_params.id;
+	alter table if exists public.measurment_baths
+	drop constraint if exists measurment_input_param_id_fk;
 
-CREATE SEQUENCE igor.batch_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-ALTER SEQUENCE igor.batch_seq OWNED BY igor.measurment_batch.id;
+	alter table if exists public.measurment_baths
+	drop constraint if exists emploee_id_fk;
 
-CREATE SEQUENCE igor.type_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-ALTER SEQUENCE igor.type_seq OWNED BY igor.measurment_type.id;
+	-- Таблицы
+	drop table if exists public.measurment_input_params;
+	drop table if exists public.measurment_baths;
+	drop table if exists public.employees;
+	drop table if exists public.measurment_types;
+	drop table if exists public.military_ranks;
 
-CREATE SEQUENCE igor.users_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-ALTER SEQUENCE igor.users_seq OWNED BY igor.users.id;
+	-- Нумераторы
+	drop sequence if exists public.measurment_input_params_seq;
+	drop sequence if exists public.measurment_baths_seq;
+	drop sequence if exists public.employees_seq;
+	drop sequence if exists public.military_ranks_seq;
+	drop sequence if exists public.measurment_types_seq;
+end;
 
-insert into igor.measurment_type(equip_type) values ('DMK');
-insert into igor.measurment_type(equip_type) values ('BP');
+raise notice 'Удаление старых данных выполнено успешно';
 
-insert into igor.measurment_params(measurment_type_id,measurment_batch_id,height,temperature,pressure,wind_speed,wind_direction)
-values (1,1,100,12,34,45,0.2);
-insert into igor.measurment_params(measurment_type_id,measurment_batch_id,height,temperature,pressure,bullet_speed,wind_direction)
-values (1,1,100,12,34,45,0.2);
+/*
+ 2. Добавляем структуры данных 
+ ================================================
+ */
 
-insert into igor.users(username,military_position) values ('igor','general');
-insert into igor.measurment_batch(start_period,position_x,position_y,users_id) values (now(),0.5,0.5,1);
-
-
-
--- select * from igor.measurment_type;
--- select * from igor.measurment_params;
--- select * from igor.measurment_batch;
-select * from igor.users inner join igor.measurment_batch on igor.measurment_batch.users_id = igor.users.id;
-
--- drop table igor.measurment_type;
--- drop table igor.measurment_params;
--- drop table  igor.measurment_batch;
--- drop table igor.users;
-
-alter table igor.measurment_batch
-add constraint users_id_contraint
-foreign key (users_id)
-references igor.users(id);
-
-
-alter table igor.measurment_params
-add constraint measurment_type_id_contraint
-foreign key (measurment_type_id)
-references igor.measurment_type(id);
-
-
-alter table igor.measurment_params
-add constraint measurment_batch_id_contraint
-foreign key (measurment_batch_id)
-references igor.measurment_batch(id);
-
-
-
-
-select * from igor.users inner join igor.measurment_batch on igor.measurment_batch.users_id = igor.users.id;
-
-
-select * from igor.measurment_params inner join igor.measurment_batch on igor.measurment_batch.id = igor.measurment_params.measurment_batch_id;
-
-CREATE TABLE IF NOT EXISTS igor.temperature
+-- Справочник должностей
+create table military_ranks
 (
-    t integer NOT NULL,
-    deltat numeric(8,2) NOT NULL
-)
+	id integer primary key not null,
+	description character varying(255)
+);
+
+insert into military_ranks(id, description)
+values(1,'Рядовой'),(2,'Лейтенант');
+
+create sequence military_ranks_seq start 3;
+
+alter table military_ranks alter column id set default nextval('public.military_ranks_seq');
+
+-- Пользователя
+create table employees
+(
+    id integer primary key not null,
+	name text,
+	birthday timestamp ,
+	military_rank_id integer
+);
+
+insert into employees(id, name, birthday,military_rank_id )  
+values(1, 'Воловиков Александр Сергеевич','1978-06-24', 2);
+
+create sequence employees_seq start 2;
+
+alter table employees alter column id set default nextval('public.employees_seq');
+
+
+-- Устройства для измерения
+create table measurment_types
+(
+   id integer primary key not null,
+   short_name  character varying(50),
+   description text 
+);
+
+insert into measurment_types(id, short_name, description)
+values(1, 'ДМК', 'Десантный метео комплекс'),
+(2,'ВР','Ветровое ружье');
+
+create sequence measurment_types_seq start 3;
+
+alter table measurment_types alter column id set default nextval('public.measurment_types_seq');
+
+-- Таблица с параметрами
+create table measurment_input_params
+(
+    id integer primary key not null,
+	measurment_type_id integer not null,
+	height numeric(8,2) default 0,
+	temperature numeric(8,2) default 0,
+	pressure numeric(8,2) default 0,
+	wind_direction numeric(8,2) default 0,
+	wind_speed numeric(8,2) default 0
+);
+
+insert into measurment_input_params(id, measurment_type_id, height, temperature, pressure, wind_direction,wind_speed )
+values(1, 1, 100,12,34,0.2,45);
+
+create sequence measurment_input_params_seq start 2;
+
+alter table measurment_input_params alter column id set default nextval('public.measurment_input_params_seq');
+
+-- Таблица с историей
+create table measurment_baths
+(
+		id integer primary key not null,
+		emploee_id integer not null,
+		measurment_input_param_id integer not null,
+		started timestamp default now()
+);
+
+
+insert into measurment_baths(id, emploee_id, measurment_input_param_id)
+values(1, 1, 1);
+
+create sequence measurment_baths_seq start 2;
+
+alter table measurment_baths alter column id set default nextval('public.measurment_baths_seq');
+
+raise notice 'Создание общих справочников и наполнение выполнено успешно'; 
+
+/*
+ 3. Подготовка расчетных структур
+ ==========================================
+ */
+
+drop table if exists calc_temperatures_correction;
+create table calc_temperatures_correction
+(
+   temperature numeric(8,2) primary key,
+   correction numeric(8,2)
+);
+
+insert into public.calc_temperatures_correction(temperature, correction)
+Values(0, 0.5),(5, 0.5),(10, 1), (20,1), (25, 2), (30, 3.5), (40, 4.5);
+
+drop type  if exists interpolation_type;
+create type interpolation_type as
+(
+	x0 numeric(8,2),
+	x1 numeric(8,2),
+	y0 numeric(8,2),
+	y1 numeric(8,2)
+);
+
+raise notice 'Расчетные структуры сформированы';
+
+/*
+ 4. Создание связей
+ ==========================================
+ */
+
+begin 
+	
+	alter table public.measurment_baths
+	add constraint emploee_id_fk 
+	foreign key (emploee_id)
+	references public.employees (id);
+	
+	alter table public.measurment_baths
+	add constraint measurment_input_param_id_fk 
+	foreign key(measurment_input_param_id)
+	references public.measurment_input_params(id);
+	
+	alter table public.measurment_input_params
+	add constraint measurment_type_id_fk
+	foreign key(measurment_type_id)
+	references public.measurment_types (id);
+	
+	alter table public.employees
+	add constraint military_rank_id_fk
+	foreign key(military_rank_id)
+	references public.military_ranks (id);
+
+end;
+
+raise notice 'Связи сформированы';
+raise notice 'Структура сформирована успешно';
+
+
+end $$;
+
+
+
+
+
+
+
+
 
 
