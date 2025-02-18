@@ -172,13 +172,20 @@ end $$;
 
 drop table if exists igorr.measure_settings;
 drop table if exists igorr.constants;
-
+--------------------------------------
 CREATE TABLE IF NOT EXISTS igorr.constants
 (
     key character varying(30) COLLATE pg_catalog."default" NOT NULL,
     value text COLLATE pg_catalog."default" NOT NULL
 )
+
 TABLESPACE pg_default;
+
+insert into igorr.constants(key,value) values('const_pressure','750');
+insert into igorr.constants(key,value) values('const_temperature','15.9');
+
+------------------------------------------------------------------------------
+select * from constants;
 
 ALTER TABLE IF EXISTS igorr.constants
     OWNER to zelmoron;
@@ -215,7 +222,8 @@ $$;
 
 DROP TYPE IF EXISTS igorr.measure_type CASCADE;
 CREATE TYPE igorr.measure_type AS (
-    param NUMERIC
+    param NUMERIC,
+	ttype text
 );
 
 CREATE OR REPLACE FUNCTION igorr.get_measure_setting(type_param VARCHAR,value_param numeric)
@@ -239,6 +247,7 @@ BEGIN
     END IF;
 
     result.param := value_param;
+	result.ttype := type_param;
     RETURN result;
 END;
 $$ LANGUAGE plpgsql;
@@ -247,39 +256,7 @@ DROP FUNCTION IF EXISTS igorr."fnHeaderGetPresure"();
 DROP FUNCTION IF EXISTS igorr."fnHeaderGetData"();
 DROP FUNCTION IF EXISTS igorr."fnHeaderGetHeight"();
 
-CREATE OR REPLACE FUNCTION igorr."fnHeaderGetPresure"(
-    pressure numeric,temperature numeric
-)
-    RETURNS text
-    LANGUAGE 'plpgsql' 
-    COST 100
-    VOLATILE PARALLEL UNSAFE
-AS $$
-DECLARE
-    var_result numeric; 
-    txt text;
-    results numeric;
-    int_res integer;
-    
-BEGIN
-    SELECT value::numeric INTO var_result
-    FROM igorr.constants
-    WHERE key = 'const_pressure';
 
-    results := pressure-var_result;
-    int_res := results::integer;
-    if int_res >0 then
-        
-        txt := LPAD(int_res::text, 3, '0');
-    else
-        int_res := int_res * -1;
-        select '5' || LPAD(int_res::text, 2, '0') into txt;
-        
-    end if;
-    
-    RETURN txt; 
-END;
-$$;
 
 CREATE OR REPLACE FUNCTION igorr."fnHeaderGetData"()
     RETURNS text 
@@ -311,7 +288,7 @@ BEGIN
     RETURN var_result;
 END;
 $$;
-
+--------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION igorr.interpolate_correction(temp_input NUMERIC)
 RETURNS NUMERIC AS $$
 DECLARE
@@ -354,6 +331,63 @@ BEGIN
     RETURN correction_result;
 END;
 $$ LANGUAGE plpgsql;
+---------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION igorr."fnHeaderGetPresure"(
+    pressure NUMERIC, temperature NUMERIC
+)
+RETURNS TEXT
+LANGUAGE 'plpgsql'
+COST 100
+VOLATILE PARALLEL UNSAFE
+AS $$
+DECLARE
+    var_result NUMERIC;
+    txt TEXT;
+    results NUMERIC;
+    int_res INTEGER;
+    temp_correction NUMERIC;
+    temp_adjusted NUMERIC;
+    delta_temp INTEGER;
+BEGIN
+
+	RAISE NOTICE 'Входное значение temperature: %', temperature;
+  	-- SELECT igorr.get_measure_setting('Температура', 23) INTO checkd;
+	 
+	  
+    SELECT value::NUMERIC INTO var_result
+    FROM igorr.constants
+    WHERE key = 'const_pressure';
+
+ 
+    results := pressure - var_result;
+    int_res := results::INTEGER;
+
+
+    temp_correction := igorr.interpolate_correction(temperature);
+    
+
+    temp_adjusted := temperature + temp_correction;
+    
+  
+    SELECT value::NUMERIC INTO var_result
+    FROM igorr.constants
+    WHERE key = 'const_temperature';
+    
+
+    delta_temp := ROUND(temp_adjusted - var_result)::INTEGER;
+    
+
+    IF int_res > 0 THEN
+        txt := LPAD(int_res::TEXT, 3, '0') || LPAD(delta_temp::TEXT, 2, '0');
+    ELSE
+        int_res := int_res * -1;
+        txt := '5' || LPAD(int_res::TEXT, 2, '0') || LPAD(delta_temp::TEXT, 2, '0');
+    END IF;
+    
+    RETURN txt;
+END;
+$$;
+------------------------------------------------------------------
 
 SELECT igorr."fnHeaderGetPresure"(730,23);
 SELECT igorr."fnHeaderGetData"();
@@ -411,4 +445,6 @@ BEGIN
 END;
 $$;
 
-select * from igorr.measurment_baths;
+-- select * from igorr.measurment_baths;
+SELECT igorr."fnHeaderGetPresure"(780,25);
+
