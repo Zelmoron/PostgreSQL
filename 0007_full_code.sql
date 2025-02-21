@@ -241,7 +241,9 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Параметр % не найден', type_param;
     END IF;
-    
+	IF value_param is null then
+		RAISE EXCEPTION 'Null вместо значения';
+    END IF;
     IF value_param < mn_value OR value_param > mx_value THEN
         RAISE EXCEPTION 'Входные данные % не входят в диапазон [% - %]', value_param, mn_value, mx_value;
     END IF;
@@ -446,5 +448,5 @@ END;
 $$;
 
 -- select * from igorr.measurment_baths;
-SELECT igorr."fnHeaderGetPresure"(780,25);
-
+-- SELECT igorr."fnHeaderGetPresure"(780,25);
+select igorr.get_measure_setting('Температура',null)
