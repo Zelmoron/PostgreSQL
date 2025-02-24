@@ -194,7 +194,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_key
     ON igorr.constants USING btree
     (key COLLATE pg_catalog."default" ASC NULLS LAST)
     TABLESPACE pg_default;
-
+--------------------------------------------------------------------
 CREATE TABLE if not exists igorr.measure_settings (
     param VARCHAR(50) NOT NULL,
     min_value NUMERIC NOT NULL,
@@ -219,40 +219,49 @@ begin
     end if;
 END;
 $$;
-
+--------------------------------------------------------------------------------------------
 DROP TYPE IF EXISTS igorr.measure_type CASCADE;
 CREATE TYPE igorr.measure_type AS (
     param NUMERIC,
 	ttype text
 );
 
-CREATE OR REPLACE FUNCTION igorr.get_measure_setting(type_param VARCHAR,value_param numeric)
+CREATE OR REPLACE FUNCTION igorr.get_measure_setting(type_param VARCHAR, value_param numeric)
 RETURNS igorr.measure_type AS $$
 DECLARE
     mn_value numeric;
     mx_value numeric;
     result igorr.measure_type;
 BEGIN
-    SELECT  min_value, max_value
-    INTO mn_value,mx_value
+    -- Получаем минимальное и максимальное значение для параметра
+    SELECT min_value, max_value
+    INTO mn_value, mx_value
     FROM igorr.measure_settings
     WHERE param = type_param;
 
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Параметр % не найден', type_param;
     END IF;
-	IF value_param is null then
-		RAISE EXCEPTION 'Null вместо значения';
-    END IF;
-    IF value_param < mn_value OR value_param > mx_value THEN
-        RAISE EXCEPTION 'Входные данные % не входят в диапазон [% - %]', value_param, mn_value, mx_value;
+
+    -- Проверка на null
+    IF value_param IS NULL THEN
+        RAISE EXCEPTION 'Null вместо значения';
     END IF;
 
+    -- Проверка на диапазон
+    IF value_param < mn_value OR value_param > mx_value THEN
+        -- Возвращаем NULL, что будет означать ошибку
+        RETURN NULL;
+    END IF;
+
+    -- Возвращаем результат
     result.param := value_param;
-	result.ttype := type_param;
+    result.ttype := type_param;
     RETURN result;
 END;
 $$ LANGUAGE plpgsql;
+
+
 
 DROP FUNCTION IF EXISTS igorr."fnHeaderGetPresure"();
 DROP FUNCTION IF EXISTS igorr."fnHeaderGetData"();
@@ -391,12 +400,12 @@ END;
 $$;
 ------------------------------------------------------------------
 
-SELECT igorr."fnHeaderGetPresure"(730,23);
-SELECT igorr."fnHeaderGetData"();
-SELECT igorr."fnHeaderGetHeight"(10);
+-- SELECT igorr."fnHeaderGetPresure"(730,23);
+-- SELECT igorr."fnHeaderGetData"();
+-- SELECT igorr."fnHeaderGetHeight"(10);
 
-select * from igorr.calc_temperatures_correction;
-SELECT igorr.interpolate_correction(23);
+-- select * from igorr.calc_temperatures_correction;
+-- SELECT igorr.interpolate_correction(23);
 
 INSERT INTO igorr.employees (id, name, birthday, military_rank_id) 
 VALUES
@@ -426,8 +435,8 @@ BEGIN
                     measurment_type_id, 
                     100 + (random() * 400),
                     20 + (random() * 10),
-                    1010 + (random() * 20),
-                    random() * 360,
+                    500 + (random() * 20),
+                    random() * 80,
                     random() * 15
                 ) RETURNING id INTO param_id;
 
@@ -448,5 +457,158 @@ END;
 $$;
 
 -- select * from igorr.measurment_baths;
--- SELECT igorr."fnHeaderGetPresure"(780,25);
-select igorr.get_measure_setting('Температура',null)
+-- SELECT igorr."fnHeaderGetPresure"(780,27);
+-- select igorr.get_measure_setting('Температура',123)
+-- Создание таблицы температурных отклонений
+-------------------------------------------------------------------
+DROP TABLE IF EXISTS igorr.temperature_deviations;
+CREATE TABLE IF NOT EXISTS igorr.temperature_deviations (
+    height integer PRIMARY KEY,
+    dev_1 numeric,
+    dev_2 numeric,
+    dev_3 numeric,
+    dev_4 numeric,
+    dev_5 numeric,
+    dev_6 numeric,
+    dev_7 numeric,
+    dev_8 numeric,
+    dev_9 numeric,
+    dev_10 numeric,
+    dev_20 numeric,
+    dev_30 numeric,
+    dev_40 numeric,
+    dev_50 numeric
+);
+
+
+INSERT INTO igorr.temperature_deviations VALUES
+(200, -1, -2, -3, -4, -5, -6, -7, -8, -8, -9, -20, -29, -39, -49),
+(400, -1, -2, -3, -4, -5, -6, -6, -7, -8, -9, -19, -29, -38, -48),
+(800, -1, -2, -3, -4, -5, -6, -6, -7, -7, -8, -18, -28, -37, -46),
+(1200, -1, -2, -3, -4, -5, -5, -5, -6, -7, -8, -17, -26, -35, -44),
+(1600, -1, -2, -3, -3, -4, -4, -5, -6, -7, -7, -17, -25, -34, -42),
+(2000, -1, -2, -3, -3, -4, -4, -5, -6, -6, -7, -16, -24, -32, -40),
+(2400, -1, -2, -2, -3, -4, -4, -5, -5, -6, -7, -15, -23, -31, -38),
+(3000, -1, -2, -2, -3, -4, -4, -4, -5, -5, -6, -15, -22, -30, -37),
+(4000, -1, -2, -2, -3, -4, -4, -4, -4, -5, -6, -14, -20, -27, -34);
+
+
+CREATE OR REPLACE FUNCTION igorr."get_deviation_value"(
+    p_height integer,
+    p_value integer
+) RETURNS numeric AS $$
+BEGIN
+    RETURN CASE 
+        WHEN p_value <= 10 THEN
+            (SELECT CASE p_value
+                WHEN 1 THEN dev_1
+                WHEN 2 THEN dev_2
+                WHEN 3 THEN dev_3
+                WHEN 4 THEN dev_4
+                WHEN 5 THEN dev_5
+                WHEN 6 THEN dev_6
+                WHEN 7 THEN dev_7
+                WHEN 8 THEN dev_8
+                WHEN 9 THEN dev_9
+                WHEN 10 THEN dev_10
+            END
+            FROM temperature_deviations 
+            WHERE height = p_height)
+        WHEN p_value = 20 THEN
+            (SELECT dev_20 FROM temperature_deviations WHERE height = p_height)
+        WHEN p_value = 30 THEN
+            (SELECT dev_30 FROM temperature_deviations WHERE height = p_height)
+        WHEN p_value = 40 THEN
+            (SELECT dev_40 FROM temperature_deviations WHERE height = p_height)
+        WHEN p_value = 50 THEN
+            (SELECT dev_50 FROM temperature_deviations WHERE height = p_height)
+    END;
+END;
+$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION igorr."calculate_temperature_deviation"(
+    p_height integer,
+    p_temperature numeric
+) RETURNS numeric[] AS $$
+DECLARE
+    v_tens integer;
+    v_ones integer;
+    v_dev_tens numeric;
+    v_dev_ones numeric;
+    v_result numeric;
+BEGIN
+
+    v_tens := TRUNC(p_temperature / 10) * 10;
+    v_ones := p_temperature - v_tens;
+
+
+    v_dev_tens := get_deviation_value(p_height, ABS(v_tens));
+    v_dev_ones := get_deviation_value(p_height, ABS(v_ones));
+    
+
+    v_result := v_dev_tens + v_dev_ones;
+    
+
+    IF p_temperature < 0 THEN
+        v_result := ABS(v_result) + 50;
+    END IF;
+
+    RETURN ARRAY[v_tens, v_ones, v_dev_tens, v_dev_ones, v_result];
+END;
+$$ LANGUAGE plpgsql;
+-----------------------------------------------------------------------------
+
+
+
+
+WITH measurements AS (
+    SELECT 
+        mb.emploee_id,
+        mip.temperature,
+        mip.pressure,
+        mip.wind_direction,
+        mip.wind_speed
+    FROM igorr.measurment_baths mb
+    JOIN igorr.measurment_input_params mip 
+        ON mb.measurment_input_param_id = mip.id
+),
+errors AS (
+    SELECT 
+        m.emploee_id,
+        COUNT(*) FILTER (WHERE 
+            (
+                SELECT igorr.get_measure_setting('Температура', m.temperature) IS NULL
+            ) OR 
+            (
+                SELECT igorr.get_measure_setting('Давление', m.pressure) IS NULL
+            ) OR 
+            (
+                SELECT igorr.get_measure_setting('Направление ветра', m.wind_direction) IS NULL
+            ) OR 
+            (
+                SELECT igorr.get_measure_setting('Скорость ветра', m.wind_speed) IS NULL
+            )
+        ) AS error_count
+    FROM measurements m
+    GROUP BY m.emploee_id
+)
+SELECT 
+    e.name AS "ФИО",
+    mr.description AS "Должность",  
+    COUNT(mb.id) AS "Кол-во измерений",
+    COALESCE(err.error_count, 0) AS "Количество ошибочных данных"
+FROM igorr.employees e
+LEFT JOIN igorr.military_ranks mr ON e.military_rank_id = mr.id
+LEFT JOIN igorr.measurment_baths mb ON e.id = mb.emploee_id
+LEFT JOIN errors err ON e.id = err.emploee_id
+GROUP BY e.id, e.name, mr.description, err.error_count  
+ORDER BY "Количество ошибочных данных" DESC;
+
+
+
+-- SELECT * FROM igorr.employees LIMIT 5;
+-- -- SELECT * FROM igorr.measurment_baths LIMIT 5;
+-- select * from igorr.measurment_input_params;
+-- SELECT igorr.get_measure_setting('Температура', 1);
+-- SELECT * FROM igorr.military_ranks LIMIT 5;
+
