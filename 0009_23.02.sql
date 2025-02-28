@@ -674,7 +674,7 @@ LEFT JOIN errors err ON e.id = err.emploee_id
 GROUP BY e.id, e.name, mr.description, err.error_count  
 ORDER BY "Количество ошибочных данных" DESC;
 
-select igorr."calculate_temperature_deviation"(200,40);
+--select igorr."calculate_temperature_deviation"(200,40);
 -- SELECT * FROM igorr.employees LIMIT 5;
 -- -- SELECT * FROM igorr.measurment_baths LIMIT 5;
 -- select * from igorr.measurment_input_params;
