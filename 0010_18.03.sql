@@ -1321,7 +1321,7 @@ begin
         );
 
     if check_result.is_check = False then
-        raise notice 'error %',  check_result.error_message;
+        raise notice 'ERROR %',  check_result.error_message;
         NEW.error_message := check_result.error_message;
         return NEW;
     else
@@ -1330,13 +1330,7 @@ begin
         FROM public.employees 
         WHERE name = NEW.employee_name;
 
-        IF NOT FOUND THEN
-            INSERT INTO public.employees (name, birthday, military_rank_id) 
-            VALUES (NEW.employee_name, NOW(), 1)
-            RETURNING id INTO employee_id;
-        END IF;
-
-        INSERT INTO public.measurement_input_params 
+		INSERT INTO public.measurement_input_params 
             (measurement_type_id, altitude, temperature, air_pressure, 
              wind_direction, wind_speed, blast_radius)
         VALUES 
@@ -1344,10 +1338,8 @@ begin
              NEW.wind_direction, NEW.wind_speed, NEW.blast_radius)
         RETURNING id INTO measurement_input_params_id;
 
-        INSERT INTO public.measurement_logs 
-            (employee_id, measurement_input_param_id, timestamp)
-        VALUES 
-            (employee_id, measurement_input_params_id, NOW());
+
+        
     end if;
 
     input_params := check_result.params;
