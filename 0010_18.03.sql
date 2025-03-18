@@ -1277,3 +1277,95 @@ $body$;
 
 
 
+create sequence meteorological_input_params_seq;
+
+create table if not exists meteorological_input_params
+(
+    id integer not null primary key default nextval('public.meteorological_input_params_seq'),
+    employee_name varchar(50),
+    measurement_type_id integer NOT NULL,
+    altitude numeric(8,2) DEFAULT 0,
+    temperature numeric(8,2) DEFAULT 0,
+    air_pressure numeric(8,2) DEFAULT 0,
+    wind_direction numeric(8,2) DEFAULT 0,
+    wind_speed numeric(8,2) DEFAULT 0,
+    blast_radius numeric(8,2) DEFAULT 0,
+    measurement_input_params_id integer,
+    error_message text,
+    calculation_result jsonb
+);
+
+CREATE OR REPLACE FUNCTION public.fn_tr_meteorological_input_params()
+    RETURNS trigger
+    LANGUAGE 'plpgsql'
+    COST 100
+    VOLATILE NOT LEAKPROOF
+AS $BODY$
+declare 
+    check_result public.check_result_type;
+    input_params public.input_params_type;
+    response jsonb;
+    calc_result public.calc_result_type[];
+    header jsonb;
+    employee_id integer;
+    measurement_input_params_id integer;
+begin
+
+    check_result := fn_check_input_params(  
+            NEW.altitude,
+            NEW.temperature,
+            NEW.air_pressure,
+            NEW.wind_direction,
+            NEW.wind_speed,
+            NEW.blast_radius
+        );
+
+    if check_result.is_check = False then
+        raise notice 'ERROR %',  check_result.error_message;
+        NEW.error_message := check_result.error_message;
+        return NEW;
+    else
+
+        SELECT id INTO employee_id 
+        FROM public.employees 
+        WHERE name = NEW.employee_name;
+
+		INSERT INTO public.measurement_input_params 
+            (measurement_type_id, altitude, temperature, air_pressure, 
+             wind_direction, wind_speed, blast_radius)
+        VALUES 
+            (NEW.measurement_type_id, NEW.altitude, NEW.temperature, NEW.air_pressure, 
+             NEW.wind_direction, NEW.wind_speed, NEW.blast_radius)
+        RETURNING id INTO measurement_input_params_id;
+
+
+        
+    end if;
+
+    input_params := check_result.params;
+
+    header := public.fn_calc_header_meteo_avg(input_params);
+
+    call public.sp_calc_corrections(
+        par_input_params => input_params, 
+        par_measurement_type_id => NEW.measurement_type_id, 
+        par_results => calc_result
+    );
+
+    response := jsonb_build_object(
+        'header', header,
+        'calc_result', to_jsonb(calc_result)
+    );
+
+    NEW.calculation_result = response;
+    return NEW;
+end;
+$BODY$;
+
+--
+CREATE TRIGGER tr_meteorological_input_params
+BEFORE INSERT ON meteorological_input_params
+FOR EACH ROW
+EXECUTE FUNCTION fn_tr_meteorological_input_params();
+
+
